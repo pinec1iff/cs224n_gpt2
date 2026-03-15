@@ -346,6 +346,7 @@ def plot_benchmark(flash_results, normal_results, longformer_results):
     ax.legend()
 
   plt.tight_layout()
+  os.makedirs("./output/H100", exist_ok=True)
   plt.savefig("./output/H100/Sonnet_Benchmark_Results.png", dpi=150)
   plt.show()
 
@@ -353,8 +354,8 @@ def get_args():
   parser = argparse.ArgumentParser()
 
   parser.add_argument("--sonnet_path", type=str, default="data/sonnets.txt")
-  parser.add_argument("--held_out_sonnet_path", type=str, default="data/sonnets_held_out_dev.txt")
-  parser.add_argument("--sonnet_out", type=str, default="predictions/generated_sonnets_dev.txt")
+  parser.add_argument("--held_out_sonnet_path", type=str, default="data/sonnets_held_out.txt")
+  parser.add_argument("--sonnet_out", type=str, default="predictions/generated_sonnets.txt")
 
   parser.add_argument("--seed", type=int, default=11711)
   parser.add_argument("--epochs", type=int, default=10)
@@ -364,11 +365,11 @@ def get_args():
   parser.add_argument("--use_longformer", action='store_true')
 
   # Generation parameters.
-  parser.add_argument("--temperature", type=float, help="softmax temperature.", default=1.2)
+  parser.add_argument("--temperature", type=float, help="softmax temperature.", default=1.5)
   parser.add_argument("--top_p", type=float, help="Cumulative probability distribution for nucleus sampling.",
                       default=0.9)
 
-  parser.add_argument("--batch_size", help='The training batch size.', type=int, default=8)
+  parser.add_argument("--batch_size", help='The training batch size.', type=int, default=6)
   parser.add_argument("--lr", type=float, help="learning rate", default=1e-5)
   parser.add_argument("--model_size", type=str, help="The model size as specified on hugging face.",
                       choices=['gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'], default='gpt2')
@@ -400,11 +401,12 @@ app = modal.App("sonnet-generator")
 # define environment
 image = (
     modal.Image.debian_slim()
-    .pip_install("torch", "torchvision", "torchaudio", "triton","tqdm==4.58.0", "requests==2.25.1", "importlib-metadata==3.7.0", "filelock==3.0.12", "sklearn==0.0", "tokenizers==0.20", "explainaboard-client==0.0.7", "einops==0.8.0", "transformers==4.46.3", "sacrebleu==2.5.1", "matplotlib>=3.7.5", "pronouncing>=0.2.0")
+    .pip_install("torch", "torchvision", "torchaudio", "triton", "tqdm==4.58.0", "pandas", "requests==2.25.1", "importlib-metadata==3.7.0", "filelock==3.0.12", "sklearn==0.0", "tokenizers==0.20", "explainaboard-client==0.0.7", "einops==0.8.0", "transformers==4.46.3", "sacrebleu==2.5.1", "matplotlib>=3.7.5", "pronouncing>=0.2.0")
     .env({"PYTHONPATH": "/root/project"})
     .add_local_dir("data", remote_path="/root/project/data", ignore=["*.pt", "__pycache__", ".venv"])
     .add_local_dir("models", remote_path="/root/project/models", ignore=["*.pt", "__pycache__", ".venv"])
     .add_local_dir("modules", remote_path="/root/project/modules", ignore=["*.pt", "__pycache__", ".venv"])
+    .add_local_file("9_10-1e-05-sonnet.pt", remote_path="/root/project/9_10-1e-05-sonnet.pt")
     .add_local_file("classifier.py", remote_path="/root/project/classifier.py")
     .add_local_file("config.py", remote_path="/root/project/config.py")
     .add_local_file("datasets.py", remote_path="/root/project/datasets.py")
@@ -428,6 +430,8 @@ def run_on_modal(args):
     
     # force GPU usage and set the filepath
     args.use_gpu = True
+    args.benchmark = False
+    args.model_size = 'gpt2-medium'
     args.filepath = f'{args.epochs}-{args.lr}-sonnet.pt'
     
     # run original pipeline
